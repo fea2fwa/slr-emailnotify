@@ -48,32 +48,9 @@ def fetch_contentdata_from_url(url):
     question_text = meta_tag['content']
 
     # bs4とdatetimeで投稿時間（日本時間はtimedeltaを利用）を取得
-    meta_tag = soup.find('meta', property='article:published_time')
-
-    if meta_tag:
-        # content属性の値 (2025-11-04T00:17:42.590Z) を取得
-        raw_date = meta_tag.get('content')
-        
-        # ISO形式の文字列をdatetimeオブジェクトに変換
-        # ※末尾のZはUTC（協定世界時）を意味します
-        dt = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
-        
-        # 指定の形式にフォーマット
-        # %-d は0埋めなしの日にち（Windows環境では %#d）
-        date_text = dt.strftime('%Y年%m月%d日%H:%M').replace(' 0', ' ')
-        
-        # 「04日」を「4日」にするための調整（簡易的な置換例）
-        date_text = dt.strftime('%Y年%m月').replace(' 0', '') + str(dt.day) + "日" + dt.strftime(' %H:%M')
-
-        original_time = datetime.strptime(date_text, "%Y年%m月%d日 %H:%M")
-    else:
-        print("該当するタグが見つかりませんでした。")
-
+    date_text = soup.find('p', class_='m-r-1 dell-conversation-ballon__header-date text text--normal css-1ry1tx8 css-jp8xm2').get_text(strip=True)
+    original_time = datetime.strptime(date_text, "%Y年%m月%d日 %H:%M")
     new_time = original_time + timedelta(hours=9)
-
-    # date_text = soup.find('p', class_='m-r-1 dell-conversation-ballon__header-date text text--normal css-1ry1tx8 css-jp8xm2').get_text(strip=True)
-    # original_time = datetime.strptime(date_text, "%Y年%m月%d日 %H:%M")
-    # new_time = original_time + timedelta(hours=9   #2026年2月のSprinklrのHTML仕様変更により本コードは利用できなくなったために書き換え)
     post_time = new_time.strftime('%Y-%m-%d %H:%M')
 
     return (space_name, author, post_time, question_text)
