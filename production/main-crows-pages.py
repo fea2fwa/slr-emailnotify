@@ -4,7 +4,7 @@ import time
 import os
 from dotenv import load_dotenv
 import smtplib
-from email.mime.text import MIMEText
+from email.mime.text import MIMETextlinks
 import json
 from datetime import datetime, timedelta
 import urllib.parse
@@ -23,7 +23,7 @@ def fetch_data_from_url(url):
 
     # 各リンクのtitleとhrefをディクショナリに保存
     title_url_dict = {link['title']: link['href'] for link in links}
-
+    
     return(title_url_dict)
 
 def fetch_contentdata_from_url(url):
