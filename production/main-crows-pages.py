@@ -1,30 +1,80 @@
 import requests
 from bs4 import BeautifulSoup
+import urllib.parse
+import re
 import time
 import os
 from dotenv import load_dotenv
 import smtplib
-from email.mime.text import MIMETextlinks
+from email.mime.text import MIMEText
 import json
 from datetime import datetime, timedelta
-import urllib.parse
+
 
 
 def fetch_data_from_url(url):
     response = requests.get(url)
     if response.status_code != 200:
         print(f"Failed to fetch {url}")
-        return
-    
+        # 何らかの理由でresponseが取得できなかった場合は前回のresponseを利用する
+        response = response_prev
+
+    # 上記エラー処理のために保存しておく変数
+    response_prev = response
+
     soup = BeautifulSoup(response.text, 'html.parser')
+    script_tags = soup.find_all('script', string=re.compile(r'window\.__PRELOADED_STATE__'))
 
-    # すべての<a>タグを検索
-    links = soup.find_all('a', title=True, href=True)
+    for script in script_tags:
+        match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*"(.*?)";?', script.string)
+        if match:
+            encoded_data = match.group(1)
+            decoded_data = urllib.parse.unquote(encoded_data)
+            
+            try:
+                # デコードした文字列をJSONとしてパース（Pythonの辞書型に変換）
+                json_data = json.loads(decoded_data)
+                
+                # 再帰的に辞書を探索し、質問のタイトルを抽出する関数
+                def extract_question_data(data):
+                    extracted = []
+                    if isinstance(data, dict):
+                        # データタイプが「QUESTION（質問）」の場合に情報を取得
+                        if data.get('type') == 'QUESTION':
+                            author_info = data.get('author', {})
+                            extracted.append({
+                                'conversationId': data.get('conversationId'),
+                                'path': data.get('path'),
+                                'title': data.get('title'),
+                                'updatedAt': data.get('updatedAt'),
+                                'username': author_info.get('username'),
+                                'content': data.get('content')
+                            })
+                        # さらに深い階層を探索
+                        for value in data.values():
+                            extracted.extend(extract_question_data(value))
+                    elif isinstance(data, list):
+                        # リスト内の各要素を探索
+                        for item in data:
+                            extracted.extend(extract_question_data(item))
+                    return extracted
+                
+                # 抽出処理の実行
+                raw_data = extract_question_data(json_data)
+                
+                # conversationIdで重複を排除
+                seen_conversation_ids = set()
+                all_extracted_data = []
+                for item in raw_data:
+                    if item['conversationId'] not in seen_conversation_ids:
+                        all_extracted_data.append(item)
+                        seen_conversation_ids.add(item['conversationId'])
+                
+            except json.JSONDecodeError:
+                print("JSONデータのパースに失敗しました。")
+            break
+    return(all_extracted_data)
 
-    # 各リンクのtitleとhrefをディクショナリに保存
-    title_url_dict = {link['title']: link['href'] for link in links}
-    
-    return(title_url_dict)
 
 def fetch_contentdata_from_url(url):
     response = requests.get(url)
@@ -147,54 +197,52 @@ def check_for_updates(url, check_interval=300):
     print("Starting to monitor websites for updates...")
 
     last_texts = fetch_data_from_url(url)
+    
+    last_texts_comp = []
+    for item in last_texts:
+        last_texts_comp.append(item.get('conversationId'))
 
-    print(last_texts)
+
+    # print(last_texts_comp)
+    # print(last_texts)
 
     while True:
         time.sleep(check_interval)
+        
+        print("content check starts")
 
         current_texts = fetch_data_from_url(url)
         if current_texts is None:
             continue
 
-        if current_texts != last_texts:
-            print(f"Update detected on {url}!")
-            print(f"Current_texts is {current_texts}")
-            print("\n")
-            print(f"Last_texts is {last_texts}")
-            added = {k: v for k, v in current_texts.items() if k not in last_texts}
-            print("新規コンテンツ情報：", added)
+        current_texts_comp = []
+        for item in current_texts:
+            current_texts_comp.append(item.get('conversationId'))
+
+        if current_texts_comp != last_texts_comp:
+            print("Update detected!")
+            # 差分のコンテンツIDを取り出し
+            current_texts_only_contid = [id for id in current_texts_comp if id not in last_texts_comp ]
+            # 差分のコンテンツを全て抽出
+            for id in current_texts_only_contid:
+                new_contents = [cont for cont in current_texts if cont.get('conversationId') == id]
+
+            # print(new_contents)
 
             body = []
             title = ""
-            for i, v in added.items():
-                # urlの中に日本語のキャラクターがあると上手く動作しないのでUTF-8でエンコード
-                url_utf8 = urllib.parse.quote(v, encoding="utf-8")
-                v2 = f"https://www.dell.com{url_utf8}"
-                # UTF-8でダブルバイトが入るとリンクが動作しなくなったのでURLエンコード
-                v3 = urllib.parse.quote(v2, safe='/:?=&')
+            for content in new_contents:
+                title = content['title']
+                url = 'https://www.dell.com/community/ja/conversations/'+content['path']
+                author = content['username']
+                # updatedAtの値が入ってこないケースがあるために、その場合には代わりに0を代入する
+                unix_time = (content['updatedAt'] or 0) / 1000
+                post_time = convert_datetime_format_unixtime(unix_time)
+                question_text = content['content']
+                
+                body.append(f"タイトル： {title}\n\nURL: {url}\n\n質問者: {author}\n\n投稿時間: {post_time}\n\n質問内容: {question_text}")
 
-                # どうやってもリンク出来るURLがメールに入ってこないので、別のテキストを準備することにした
-                splittexts = url_utf8.split('/')
-                threadid = splittexts[-1]
-
-                # 固定のURLプレフィックス
-                base_url = "https://www.dell.com/community/en/conversations/x//"
-
-                v4 = base_url + threadid.astype(str) 
-
-
-                title = i
-                print(f"確認URLは： {v3}")
-                try:
-                    space_name, author, post_time, question_text = fetch_contentdata_from_url(v2)
-                    # 新規書き込みか、過去の書き込みへのアクションなのかを確認するために現在時刻との時間差異を確認
-                    post_time_difference = calculate_time_difference(post_time)
-                    # もしも時間差異が10分以内であればメール送信のためのbodyを作成
-                    if post_time_difference < 600:
-                        body.append(f"タイトル：{i}\n\nスペース：{space_name}\n\nURL: {v4}\n\n質問者: {author}\n\n投稿時間: {post_time}\n\n質問内容:\n{question_text}\n\n\n")
-                except Exception as e:
-                    print(f"コンテンツ詳細情報取得に失敗しました：{e}")  
+            # print(body)
 
             # 環境変数からメールアドレスとパスワードを取得する
             load_dotenv()  # .envファイルから環境変数を読み込む
@@ -212,7 +260,7 @@ def check_for_updates(url, check_interval=300):
                 # else:
                 #     email_title = "Dellコミュニティに新規コンテンツが投稿されました"
 
-                content_no = len(added)
+                content_no = len(new_contents)
 
                 email_title = f"{content_no}:Dellコミュニティに新規コンテンツが投稿されました-{title}"
 
