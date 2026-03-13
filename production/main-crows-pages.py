@@ -137,7 +137,14 @@ def convert_datetime_format(dt_str):
     dt_jst = dt + timedelta(hours=9)
     
     # 新しい形式に変換
-    return dt_jst.strftime("%Y/%-m/%-d %-H:%M")
+    return dt_jst.strftime("%Y/%m/%d %H:%M")
+
+def convert_datetime_format_unixtime(unix_time):
+    # Unixタイムスタンプをdatetimeオブジェクトに変換
+    dt = datetime.fromtimestamp(unix_time)
+    
+    # 形式を整えて返す
+    return dt.strftime("%Y/%m/%d %H:%M")
 
 # 過去のスレッドにアクションがあった場合に新しい書き込みと認識されることを避けるために、現在時刻とスレッドのInitial書き込み時刻の差異を確認するための関数
 def calculate_time_difference(datetime_str):
@@ -224,8 +231,7 @@ def check_for_updates(url, check_interval=300):
             # 差分のコンテンツIDを取り出し
             current_texts_only_contid = [id for id in current_texts_comp if id not in last_texts_comp ]
             # 差分のコンテンツを全て抽出
-            for id in current_texts_only_contid:
-                new_contents = [cont for cont in current_texts if cont.get('conversationId') == id]
+            new_contents = [cont for cont in current_texts if cont.get('conversationId') in current_texts_only_contid]
 
             # print(new_contents)
 
