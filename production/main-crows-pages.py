@@ -211,7 +211,7 @@ def check_for_updates(url, check_interval=300):
 
 
     # print(last_texts_comp)
-    # print(last_texts)
+    print(last_texts)
 
     while True:
         time.sleep(check_interval)
