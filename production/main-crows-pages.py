@@ -11,8 +11,13 @@ import json
 from datetime import datetime, timedelta
 
 
+load_dotenv()  # .envファイルから環境変数を読み込む
+
+response_prev = None # fetch_data_from_url関数において当該変数の初期値が必要となる場合があるので宣言しておく
+
 
 def fetch_data_from_url(url):
+    global response_prev
     response = requests.get(url)
     if response.status_code != 200:
         print(f"Failed to fetch {url}")
@@ -239,19 +244,19 @@ def check_for_updates(url, check_interval=300):
             title = ""
             for content in new_contents:
                 title = content['title']
-                url = 'https://www.dell.com/community/ja/conversations/'+content['path']
+                thread_url = 'https://www.dell.com/community/ja/conversations/'+content['path']
                 author = content['username']
                 # updatedAtの値が入ってこないケースがあるために、その場合には代わりに0を代入する
                 unix_time = (content['updatedAt'] or 0) / 1000
                 post_time = convert_datetime_format_unixtime(unix_time)
                 question_text = content['content']
                 
-                body.append(f"タイトル： {title}\n\nURL: {url}\n\n質問者: {author}\n\n投稿時間: {post_time}\n\n質問内容: {question_text}")
+                body.append(f"タイトル： {title}\n\nURL: {thread_url}\n\n質問者: {author}\n\n投稿時間: {post_time}\n\n質問内容: {question_text}")
 
             # print(body)
 
             # 環境変数からメールアドレスとパスワードを取得する
-            load_dotenv()  # .envファイルから環境変数を読み込む
+            
             sender_email = os.environ.get("SENDER_EMAIL")
             sender_password = os.environ.get("SENDER_PASSWORD")
 
@@ -281,6 +286,7 @@ def check_for_updates(url, check_interval=300):
 
             # 最新のコンテンツを今後の比較対象とする
             last_texts = current_texts
+            last_texts_comp = current_texts_comp
 
 
 
