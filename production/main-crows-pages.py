@@ -147,9 +147,12 @@ def convert_datetime_format(dt_str):
 def convert_datetime_format_unixtime(unix_time):
     # Unixタイムスタンプをdatetimeオブジェクトに変換
     dt = datetime.fromtimestamp(unix_time)
+
+        # UTCからJSTに変換 (+9時間)
+    dt_jst = dt + timedelta(hours=9)
     
     # 形式を整えて返す
-    return dt.strftime("%Y/%m/%d %H:%M")
+    return dt_jst.strftime("%Y/%m/%d %H:%M")
 
 # 過去のスレッドにアクションがあった場合に新しい書き込みと認識されることを避けるために、現在時刻とスレッドのInitial書き込み時刻の差異を確認するための関数
 def calculate_time_difference(datetime_str):
@@ -178,9 +181,9 @@ def send_notification_email(sender_email, sender_password, recipient_emails, sub
     # リスト内に複数情報がある場合には複数行に分けて記載する
     main = "\n".join(body)
 
-    # メールを送信する
-    message = "Subject: {}\n\n{}".format(subject, main)
-    print(f"メッセージは：{message}")
+    # メールを送信する -> メール本文にもSubjectが入ってしまうので削除（18Mar2026）
+    # message = "Subject: {}\n\n{}".format(subject, main)
+    # print(f"メッセージは：{message}")
 
     # 実際にユーザーから見える送信元メールアドレス
     new_sender_email = "notification@storage.dellcommunity.jp"
@@ -194,7 +197,8 @@ def send_notification_email(sender_email, sender_password, recipient_emails, sub
     for recipient_email in recipient_emails:
         # server.sendmail(new_sender_email, recipient_email, message.encode('utf-8'))
         # MIME形式に変換
-        new_message = MIMEText(message, 'plain')
+        # new_message = MIMEText(message, 'plain')　-> メール本文にもSubjectが入ってしまうので削除（18Mar2026）
+        new_message = MIMEText(main, 'plain')
         new_message['Subject'] = subject
         new_message['From'] = new_sender_email
         new_message['To'] = recipient_email
@@ -238,7 +242,7 @@ def check_for_updates(url, check_interval=300):
             # 差分のコンテンツを全て抽出
             new_contents = [cont for cont in current_texts if cont.get('conversationId') in current_texts_only_contid]
 
-            # print(new_contents)
+            print(f"*** New Cibtebts are {new_contents} ***")
 
             body = []
             title = ""
